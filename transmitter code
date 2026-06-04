@@ -1,0 +1,153 @@
+#include <esp_now.h>
+#include <WiFi.h>
+#include <Wire.h>
+#include <MPU6050_light.h>
+
+// Receiver MAC Address
+uint8_t broadcastAddress[] = {0xb4, 0x8a, 0x0a, 0xb3, 0x5b, 0x0c};  //b4:8a:0a:b3:5b:0c
+
+// Structure
+typedef struct {
+  bool f;
+  bool b;
+  bool l;
+  bool r;
+} message;
+
+message data;
+
+// MPU6050 Object
+MPU6050 mpu(Wire);
+
+// Variables
+unsigned long timer = 0;
+float x, y;
+
+bool front = false;
+bool back = false;
+bool left = false;
+bool right = false;
+
+// Peer Info
+esp_now_peer_info_t peerInfo;
+
+// Send Callback (ESP32 Core 3.x)
+void OnDataSent(const wifi_tx_info_t *tx_info,
+                esp_now_send_status_t status) {
+
+  Serial.print("Send Status: ");
+
+  if (status == ESP_NOW_SEND_SUCCESS)
+    Serial.println("Success");
+  else
+    Serial.println("Fail");
+}
+
+void setup() {
+
+  Serial.begin(115200);
+
+  WiFi.mode(WIFI_STA);
+
+  // ESP-NOW Init
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW Init Failed");
+    return;
+  }
+
+  // Register Callback
+  esp_now_register_send_cb(OnDataSent);
+
+  // Peer Setup
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  // Add Peer
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Peer Add Failed");
+    return;
+  }
+
+  // MPU6050 Setup
+  Wire.begin(21, 22);
+
+  byte status = mpu.begin();
+
+  Serial.print("MPU6050 Status: ");
+  Serial.println(status);
+
+  while (status != 0) {
+    delay(100);
+  }
+
+  Serial.println("Keep MPU Still...");
+  delay(1000);
+
+  mpu.calcOffsets();
+
+  Serial.println("MPU Ready");
+}
+
+void loop() {
+
+  mpu.update();
+
+  if (millis() - timer > 10) {
+
+    x = mpu.getAngleX();
+    y = mpu.getAngleY();
+
+    front = false;
+    back  = false;
+    left  = false;
+    right = false;
+
+    if (x <= -30)
+      front = true;
+
+    else if (x >= 30)
+      back = true;
+
+    else if (y <= -30)
+      left = true;
+
+    else if (y >= 30)
+      right = true;
+
+    data.f = front;
+    data.b = back;
+    data.l = left;
+    data.r = right;
+
+    esp_err_t result =
+      esp_now_send(
+        broadcastAddress,
+        (uint8_t *)&data,
+        sizeof(data));
+
+    if (result != ESP_OK) {
+      Serial.println("Send Error");
+    }
+
+    Serial.print("X=");
+    Serial.print(x);
+
+    Serial.print(" Y=");
+    Serial.print(y);
+
+    Serial.print(" F=");
+    Serial.print(front);
+
+    Serial.print(" B=");
+    Serial.print(back);
+
+    Serial.print(" L=");
+    Serial.print(left);
+
+    Serial.print(" R=");
+    Serial.println(right);
+
+    timer = millis();
+  }
+}
