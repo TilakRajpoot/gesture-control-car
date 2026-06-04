@@ -1,0 +1,145 @@
+#include <esp_now.h>
+#include <WiFi.h>
+
+// Motor Pins
+#define ENA 5
+#define IN1 18
+#define IN2 19
+#define IN3 23
+#define IN4 32
+#define ENB 33
+
+// Movement Variables
+bool front = false;
+bool back = false;
+bool left = false;
+bool right = false;
+
+// Structure
+typedef struct {
+  bool f;
+  bool b;
+  bool l;
+  bool r;
+} message;
+
+message data;
+
+// ESP-NOW Receive Callback
+void OnDataRecv(const esp_now_recv_info_t *info,
+                const uint8_t *incomingData,
+                int len) {
+
+  memcpy(&data, incomingData, sizeof(data));
+
+  front = data.f;
+  back  = data.b;
+  left  = data.l;
+  right = data.r;
+}
+
+void setup() {
+
+  Serial.begin(115200);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  WiFi.mode(WIFI_STA);
+
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW Init Failed");
+    return;
+  }
+
+  esp_now_register_recv_cb(OnDataRecv);
+
+  Serial.println("ESP-NOW Receiver Ready");
+}
+
+void loop() {
+
+  if (front) {
+    carForward();
+  }
+  else if (back) {
+    carBackward();
+  }
+  else if (left) {
+    carTurnLeft();
+  }
+  else if (right) {
+    carTurnRight();
+  }
+  else {
+    carStop();
+  }
+}
+
+// =======================
+// Motor Functions
+// =======================
+
+void carForward() {
+
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void carBackward() {
+
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255);
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void carTurnLeft() {
+
+  analogWrite(ENA, 150);
+  analogWrite(ENB, 150);
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void carTurnRight() {
+
+  analogWrite(ENA, 150);
+  analogWrite(ENB, 150);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void carStop() {
+
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
